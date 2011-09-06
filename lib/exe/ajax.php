@@ -208,7 +208,97 @@ function ajax_medialist(){
     global $NS;
 
     $NS = $_POST['ns'];
-    tpl_mediaContent(true);
+    if ($_POST['do'] == 'media') {
+        tpl_fileList();
+    } else {
+        tpl_mediaContent(true);
+    }
+}
+
+/**
+ * Return the content of the right column
+ * (image details) for the Mediamanager
+ *
+ * @author Kate Arzamastseva <pshns@ukr.net>
+ */
+function ajax_mediadetails(){
+    global $DEL, $NS, $IMG, $AUTH, $JUMPTO, $REV, $lang, $fullscreen, $conf;
+    $fullscreen = true;
+    require_once(DOKU_INC.'lib/exe/mediamanager.php');
+
+    if ($_REQUEST['image']) $image = cleanID($_REQUEST['image']);
+    if (isset($IMG)) $image = $IMG;
+    if (isset($JUMPTO)) $image = $JUMPTO;
+    if (isset($REV) && !$JUMPTO) $rev = $REV;
+
+    html_msgarea();
+    tpl_fileDetails($image, $rev);
+}
+
+/**
+ * Returns image diff representation for mediamanager
+ * @author Kate Arzamastseva <pshns@ukr.net>
+ */
+function ajax_mediadiff(){
+    global $NS;
+
+    if ($_REQUEST['image']) $image = cleanID($_REQUEST['image']);
+    $NS = $_POST['ns'];
+    $auth = auth_quickaclcheck("$ns:*");
+    media_diff($image, $NS, $auth, true);
+}
+
+function ajax_mediaupload(){
+    global $NS, $MSG;
+
+    $NS = $_REQUEST['ns'];
+    $AUTH = auth_quickaclcheck("$NS:*");
+    if($AUTH >= AUTH_UPLOAD) { io_createNamespace("$NS:xxx", 'media'); }
+
+    if ($_FILES['qqfile']['error']) unset($_FILES['qqfile']);
+
+    if ($_FILES['qqfile']['tmp_name']) {
+        $res = media_upload($NS, $AUTH, $_FILES['qqfile']);
+        $id = ((empty($_POST['mediaid'])) ? $_FILES['qqfile']['name'] : $_POST['mediaid']);
+    }
+    if (isset($_GET['qqfile'])) {
+        $res = media_upload_xhr($NS, $AUTH);
+        $id = $_GET['qqfile'];
+    }
+    $id = cleanID($id, false, true);
+
+    if ($res) $result = array('success' => true,
+        'link' => media_managerURL(array('ns' => $NS, 'image' => $id), '&'),
+        'id' => $NS.':'.$id, 'ns' => $NS);
+
+    if (!$result) {
+        $error = '';
+        if (isset($MSG)) {
+            foreach($MSG as $msg) $error .= $msg['msg'];
+        }
+        $result = array('error' => $msg['msg'], 'ns' => $NS);
+    }
+    echo htmlspecialchars(json_encode($result), ENT_NOQUOTES);
+}
+
+function dir_delete($path) {
+    if (!is_string($path) || $path == "") return false;
+
+    if (is_dir($path) && !is_link($path)) {
+        if (!$dh = @opendir($path)) return false;
+
+        while ($f = readdir($dh)) {
+            if ($f == '..' || $f == '.') continue;
+            dir_delete("$path/$f");
+        }
+
+        closedir($dh);
+        return @rmdir($path);
+    } else {
+        return @unlink($path);
+    }
+
+    return false;
 }
 
 /**
